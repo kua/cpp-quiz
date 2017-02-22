@@ -1,18 +1,17 @@
 ///////////////////////// header //////////////////////////////////////////////////////////
 
 #include <iostream>
-#include <assert.h>
-#include <algorithm> // std::copy
-#include <cstddef>
 #include <memory>
-
-//using namespace std;
 
 static int g_instance_counter = 0;
 static int g_memory_usage = 0;
 static bool g_throw_on_constructor = false;
 
 ///////////////////////// code //////////////////////////////////////////////////////////
+
+#include <assert.h>
+#include <algorithm> // std::copy
+#include <cstddef> // size_t
 
 template<typename T>
 class Array
@@ -25,18 +24,18 @@ public:
   {
   }
 
-  // unsafe version
-/*  Array& operator=(const Array& other)
-  {
-    if(&other != this)
-    {
-      delete [] m_array;
-      m_size = other.m_size;
-      m_array = new T[m_size];
-      std::copy(other.m_array, other.m_array + m_size, m_array);
-    }
-    return *this;
-  }*/
+//  // unsafe version
+//  Array& operator=(const Array& other)
+//  {
+//    if(&other != this)
+//    {
+//      delete [] m_array;
+//      m_size = other.m_size;
+//      m_array = new T[m_size];
+//      std::copy(other.m_array, other.m_array + m_size, m_array);
+//    }
+//    return *this;
+//  }
 
   // safe version
   Array& operator=(Array other)
@@ -89,7 +88,7 @@ public:
 
   T& operator [](const size_t index)
   {
-    assert(index >= 0 && index < m_size);
+    assert(index < m_size);
 
     return m_array[index];
   }
@@ -133,6 +132,11 @@ struct Foo
     return m_data == other.m_data;
   }
 
+  operator int() const
+  {
+    return m_data;
+  }
+
   void* operator new[](std::size_t sz)
   {
     ++g_memory_usage;
@@ -148,6 +152,48 @@ struct Foo
 };
 
 
+template <typename T>
+void checkSize(const Array<T>& array, const size_t expecteSize, const std::string& what)
+{
+  if(array.size() != expecteSize)
+  {
+    std::cout << what << std::endl;
+    exit(EXIT_SUCCESS);
+  }
+}
+
+template <typename T>
+void checkData(Array<T>& array, const std::string& what)
+{
+  for(size_t i = 0; i < array.size(); ++i)
+    if(array[i] != static_cast<int>(i))
+    {
+      std::cout << what << std::endl;
+      exit(EXIT_SUCCESS);
+    }
+}
+
+void logicTest()
+{
+  const size_t SOURCE_SIZE = 100;
+  const size_t DIST_SIZE = 50;
+
+  Array<int> source(SOURCE_SIZE);
+  Array<int> dist(DIST_SIZE);
+
+  for(size_t i = 0; i < source.size(); ++i)
+    source[i] = i;
+
+  dist = source;
+
+  checkSize(dist, SOURCE_SIZE, "assignment operator test failure (check size)");
+  checkData(dist, "assignment operator test failure (check data)");
+
+  Array<int> dist2 = source;
+
+  checkSize(dist2, SOURCE_SIZE, "copy constructor test failure (check size)");
+  checkData(dist2, "copy constructor test failure (check data)");
+}
 
 void safetyTest(bool throwOnConstuctor = false)
 {
@@ -168,24 +214,23 @@ void safetyTest(bool throwOnConstuctor = false)
     exit(EXIT_SUCCESS);
   }
 
+  bool exceptionCatched = false;
+
   try
   {
     dist = source;
   }
   catch(const std::exception& ex)
   {
-    if(dist.size() != DIST_SIZE)
-    {
-      std::cout << "In case of an assignment operator failure, array size is changed." << std::endl;
-      exit(EXIT_SUCCESS);
-    }
+    checkSize(dist, DIST_SIZE, "In case of an assignment operator failure, array size is changed.");
+    checkData(dist, "In case of an assignment operator failure, array data is changed.");
+    exceptionCatched = true;
+  }
 
-    for(size_t i = 0; i < dist.size(); ++i)
-      if(dist[i].m_data != i)
-      {
-        std::cout << "In case of an assignment operator failure, array data is changed." << std::endl;
-        exit(EXIT_SUCCESS);
-      }
+  if(!exceptionCatched)
+  {
+    std::cout << "Array constructor catch exception." << std::endl;
+    exit(EXIT_SUCCESS);
   }
 }
 
@@ -202,6 +247,9 @@ void checkObjectsDestruction()
 int main(int argc, char *argv[])
 try
 {
+  logicTest();
+  checkObjectsDestruction();
+
   safetyTest();
   checkObjectsDestruction();
 
